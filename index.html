@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>HiddenGems | Discover Underrated Streamers</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://embed.twitch.tv/v1/embed.js"></script>
     
     <style>
         ::-webkit-scrollbar { width: 8px; }
@@ -79,10 +78,10 @@
                         </div>
                         <div class="ml-auto font-mono text-purple-400">142 ▲</div>
                     </div>
-                    </div>
+                </div>
 
                 <div class="mt-8 p-4 bg-purple-900/20 rounded-lg border border-purple-500/20 text-sm text-purple-200">
-                    <p>💡 <strong>Tip:</strong> Log in to vote. Leaderboard resets daily.</p>
+                    <p>💡 <strong>Tip:</strong> Log in to vote. The stream plays directly here!</p>
                 </div>
             </div>
         </div>
@@ -91,7 +90,6 @@
     <script>
         // --- CONFIGURATION ---
         const CLIENT_ID = 't2vgijkp48wmupnrxr76wg26unrjqf'; 
-        // Automatically detects your URL. Make sure this matches Twitch Console exactly!
         const REDIRECT_URI = window.location.href.split('#')[0]; 
 
         let accessToken = null;
@@ -110,7 +108,7 @@
             if (params.has('access_token')) {
                 accessToken = params.get('access_token');
                 
-                // Update UI to "Logged In" state
+                // Update UI
                 window.history.replaceState({}, document.title, window.location.pathname);
                 
                 const loginBtn = document.getElementById('login-btn');
@@ -121,7 +119,6 @@
 
                 document.getElementById('user-status').innerText = "Ready to search";
                 
-                // Enable the Find button
                 const findBtn = document.getElementById('find-btn');
                 findBtn.disabled = false;
                 findBtn.classList.remove('bg-slate-700', 'text-slate-500', 'cursor-not-allowed');
@@ -130,14 +127,13 @@
             }
         }
 
-        // --- 2. CORE LOGIC (With Error Handling) ---
+        // --- 2. CORE LOGIC ---
         async function getRandomStreamer() {
             if (!accessToken) {
-                alert("⚠️ Not logged in! Please refresh and log in again.");
+                alert("⚠️ Please log in again to search!");
                 return;
             }
 
-            // UI Loading State
             const btn = document.getElementById('find-btn');
             const originalText = btn.innerText;
             btn.innerText = "Searching...";
@@ -146,40 +142,36 @@
             document.getElementById('streamer-name').innerText = "Scanning Twitch Categories...";
 
             try {
-                // Step A: Fetch Top Games
+                // Step A: Fetch Games
                 const gamesRes = await fetch('https://api.twitch.tv/helix/games/top?first=100', {
                     headers: { 'Client-ID': CLIENT_ID, 'Authorization': `Bearer ${accessToken}` }
                 });
 
-                if (!gamesRes.ok) throw new Error(`Game Fetch Failed: ${gamesRes.status}`);
+                if (!gamesRes.ok) throw new Error(`Game Fetch Error: ${gamesRes.status}`);
 
                 const gamesData = await gamesRes.json();
-                
-                // Pick a random game from top 100 (avoiding top 5)
                 const randomIndex = Math.floor(Math.random() * (gamesData.data.length - 5)) + 5; 
                 const randomGame = gamesData.data[randomIndex];
                 
-                console.log(`Searching category: ${randomGame.name}`);
-                document.getElementById('streamer-name').innerText = `Checking ${randomGame.name}...`;
+                console.log(`Searching: ${randomGame.name}`);
 
-                // Step B: Fetch Streams for that game
+                // Step B: Fetch Streams
                 const streamsRes = await fetch(`https://api.twitch.tv/helix/streams?game_id=${randomGame.id}&first=100`, {
                     headers: { 'Client-ID': CLIENT_ID, 'Authorization': `Bearer ${accessToken}` }
                 });
 
-                if (!streamsRes.ok) throw new Error(`Stream Fetch Failed: ${streamsRes.status}`);
+                if (!streamsRes.ok) throw new Error(`Stream Fetch Error: ${streamsRes.status}`);
 
                 const streamsData = await streamsRes.json();
 
-                // Step C: Filter for Underrated ( > 0 and < 30 )
+                // Step C: Filter (< 30 viewers)
                 const underrated = streamsData.data.filter(s => s.viewer_count < 30 && s.viewer_count > 0);
 
                 if (underrated.length > 0) {
                     const pick = underrated[Math.floor(Math.random() * underrated.length)];
                     loadStream(pick.user_login, pick.viewer_count, randomGame.name);
                 } else {
-                    console.log("No match found, retrying...");
-                    // Add a small delay so we don't crash browser with infinite loops
+                    console.log("No match, retrying...");
                     setTimeout(() => getRandomStreamer(), 500);
                     return; 
                 }
@@ -191,24 +183,30 @@
                 btn.disabled = false;
             }
 
-            // Reset Button
             btn.innerText = originalText;
             btn.disabled = false;
         }
 
-        // --- 3. EMBED LOGIC ---
+        // --- 3. IFRAME EMBED (The Fix) ---
         function loadStream(username, viewers, gameName) {
-            document.getElementById('twitch-embed').innerHTML = ""; 
-            
-            new Twitch.Embed("twitch-embed", {
-                width: "100%",
-                height: "100%",
-                channel: username,
-                layout: "video",
-                autoplay: true,
-                parent: [window.location.hostname, "localhost", "127.0.0.1"] 
-            });
+            const container = document.getElementById('twitch-embed');
+            container.innerHTML = ""; // Clear previous video
 
+            // Get current domain for the 'parent' parameter
+            const currentHost = window.location.hostname;
+
+            // Create the Iframe
+            const iframe = document.createElement('iframe');
+            iframe.src = `https://player.twitch.tv/?channel=${username}&parent=${currentHost}&muted=false`;
+            iframe.width = "100%";
+            iframe.height = "100%";
+            iframe.setAttribute('frameborder', '0');
+            iframe.setAttribute('allowfullscreen', 'true');
+
+            // Add to page
+            container.appendChild(iframe);
+
+            // Update Info
             document.getElementById('streamer-name').innerText = username;
             document.getElementById('viewer-count').innerHTML = `
                 <span class="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
@@ -222,7 +220,6 @@
             alert(`🔥 Voted for ${name}!`);
         }
 
-        // Run on startup
         window.onload = checkLogin;
     </script>
 </body>
