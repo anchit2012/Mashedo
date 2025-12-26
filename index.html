@@ -194,6 +194,7 @@
         // --- 1. FIREBASE IMPORTS ---
         // Using CDN links for Browser Environment (No NPM required)
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.1/firebase-app.js";
+        import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.11.1/firebase-auth.js";
         import { getFirestore, collection, doc, setDoc, onSnapshot, query, orderBy, increment } from "https://www.gstatic.com/firebasejs/10.11.1/firebase-firestore.js";
 
         // --- 2. FIREBASE CONFIGURATION ---
@@ -209,15 +210,28 @@
 
         // --- 3. INITIALIZE DB ---
         let db = null;
-        try {
-            const app = initializeApp(firebaseConfig);
-            db = getFirestore(app);
-            console.log("🔥 Firebase Connected Successfully");
-            
-            // Start Listening to Leaderboard
-            subscribeToLeaderboard();
-        } catch (e) {
-            console.error("Firebase Init Error:", e);
+        let auth = null;
+
+        async function initFirebase() {
+            try {
+                const app = initializeApp(firebaseConfig);
+                auth = getAuth(app);
+                db = getFirestore(app);
+                
+                // IMPORTANT: Sign in anonymously to allow reading/writing to database
+                await signInAnonymously(auth);
+                console.log("🔥 Firebase Connected & Authenticated");
+                
+                // Start Listening to Leaderboard
+                subscribeToLeaderboard();
+            } catch (e) {
+                console.error("Firebase Init Error:", e);
+                document.getElementById('leaderboard-list').innerHTML = `
+                    <div class="h-full flex flex-col items-center justify-center text-white/20 text-center p-4">
+                        <span class="text-2xl mb-2">⚠️</span>
+                        <p class="text-xs font-mono">Database Connection Failed.</p>
+                    </div>`;
+            }
         }
 
         // --- APP VARIABLES ---
@@ -423,6 +437,13 @@
                     leaderboardData.push(doc.data());
                 });
                 renderLeaderboard();
+            }, (error) => {
+                console.error("Leaderboard Error:", error);
+                document.getElementById('leaderboard-list').innerHTML = `
+                    <div class="h-full flex flex-col items-center justify-center text-white/20 text-center p-4">
+                        <span class="text-2xl mb-2">⚠️</span>
+                        <p class="text-xs font-mono">Permission Denied.<br>Check Firestore Rules.</p>
+                    </div>`;
             });
         }
 
@@ -465,6 +486,7 @@
         }
 
         // Start
+        initFirebase();
         initAuth();
 
     </script>
