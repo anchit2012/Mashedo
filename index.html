@@ -108,10 +108,17 @@
             </h1>
         </div>
 
-        <button id="login-btn" onclick="loginWithTwitch()" class="glass-panel px-5 py-2 rounded-full font-bold hover:bg-white/5 transition flex items-center gap-3 text-sm border border-white/10">
-            <span class="uppercase tracking-widest text-xs">Login</span>
-            <div class="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
-        </button>
+        <div class="flex items-center gap-4">
+            <!-- LOGOUT BUTTON (Hidden until logged in) -->
+            <button id="logout-btn" onclick="logout()" class="hidden text-xs font-mono text-red-400 hover:text-white uppercase tracking-widest transition-colors">
+                Logout
+            </button>
+
+            <button id="login-btn" onclick="loginWithTwitch()" class="glass-panel px-5 py-2 rounded-full font-bold hover:bg-white/5 transition flex items-center gap-3 text-sm border border-white/10">
+                <span class="uppercase tracking-widest text-xs">Login</span>
+                <div class="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
+            </button>
+        </div>
     </nav>
 
     <!-- MAIN LAYOUT -->
@@ -257,6 +264,13 @@
             window.location.href = authUrl;
         }
 
+        // Added window.logout to be accessible from HTML
+        window.logout = function() {
+            localStorage.removeItem('twitch_token');
+            localStorage.removeItem('twitch_user'); 
+            window.location.reload();
+        }
+
         window.getRandomStreamer = async function() {
             if (!accessToken) return alert("System Locked. Please Login.");
 
@@ -297,9 +311,10 @@
                         // Accept if Language is Hindi
                         if (s.language === 'hi') return true;
                         
-                        // Accept if English BUT Title has Indian keywords
+                        // Accept if English BUT Title has exact Indian keywords
                         const title = (s.title || "").toLowerCase();
-                        const indianKeywords = ['india', 'indian', 'desi', 'hindi', 'bharat', 'punjabi', 'tamil', 'bangalore', 'mumbai', 'delhi'];
+                        // STRICTER FILTER: Only 'india' and 'indian'
+                        const indianKeywords = ['india', 'indian'];
                         const hasKeyword = indianKeywords.some(tag => title.includes(tag));
                         
                         return hasKeyword;
@@ -448,6 +463,8 @@
 
         function setLoggedInUI() {
             const btn = document.getElementById('login-btn');
+            const logoutBtn = document.getElementById('logout-btn');
+            
             if (currentUser) {
                 btn.innerHTML = `
                     <img src="${currentUser.profile_image_url}" class="w-5 h-5 rounded-full border border-white/30">
@@ -456,12 +473,11 @@
             }
             btn.disabled = true;
             document.getElementById('find-btn').disabled = false;
-        }
-
-        function logout() {
-            localStorage.removeItem('twitch_token');
-            localStorage.removeItem('twitch_user'); 
-            window.location.reload();
+            
+            // Show Logout Button
+            if (logoutBtn) {
+                logoutBtn.classList.remove('hidden');
+            }
         }
 
         function loadStream(streamData, gameName) {
