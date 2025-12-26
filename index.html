@@ -195,7 +195,7 @@
         // Using CDN links for Browser Environment (No NPM required)
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.1/firebase-app.js";
         import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.11.1/firebase-auth.js";
-        import { getFirestore, collection, doc, setDoc, onSnapshot, query, orderBy, increment } from "https://www.gstatic.com/firebasejs/10.11.1/firebase-firestore.js";
+        import { getFirestore, collection, doc, setDoc, onSnapshot, query, orderBy, increment, runTransaction, arrayUnion } from "https://www.gstatic.com/firebasejs/10.11.1/firebase-firestore.js";
 
         // --- 2. FIREBASE CONFIGURATION ---
         const firebaseConfig = {
@@ -325,30 +325,83 @@
 
         window.voteStreamer = async function() {
             if (!currentStreamer) return;
+            if (!currentUser) return alert("Please login to vote.");
 
             // Option A: Save to Firebase (Global)
             if (db) {
                 try {
-                    const streamerRef = doc(db, "leaderboard", currentStreamer.name); // Use Name as ID
-                    await setDoc(streamerRef, {
-                        name: currentStreamer.name,
-                        game: currentStreamer.game,
-                        thumbnail: currentStreamer.thumbnail,
-                        votes: increment(1),
-                        lastUpdated: new Date()
-                    }, { merge: true });
+                    const streamerRef = doc(db, "leaderboard", currentStreamer.name); 
+
+                    await runTransaction(db, async (transaction) => {
+                        const sfDoc = await transaction.get(streamerRef);
+                        
+                        if (!sfDoc.exists()) {
+                            // First vote for this streamer
+                            transaction.set(streamerRef, {
+                                name: currentStreamer.name,
+                                game: currentStreamer.game,
+                                thumbnail: currentStreamer.thumbnail,
+                                votes: 1,
+                                votedBy: [currentUser.id],
+                                lastUpdated: new Date()
+                            });
+                        } else {
+                            // Check if already voted
+                            const data = sfDoc.data();
+                            const voters = data.votedBy || [];
+                            
+                            if (voters.includes(currentUser.id)) {
+                                throw new Error("ALREADY_VOTED");
+                            }
+
+                            // Add vote
+                            transaction.update(streamerRef, {
+                                votes: increment(1),
+                                votedBy: arrayUnion(currentUser.id),
+                                lastUpdated: new Date()
+                            });
+                        }
+                    });
                     
                     showVoteFeedback();
                 } catch (e) {
-                    console.error("Vote failed:", e);
-                    alert("Vote failed. Check console.");
+                    if (e.message.includes("ALREADY_VOTED")) {
+                        const btn = document.getElementById('vote-btn');
+                        btn.innerHTML = `ALREADY VOTED`;
+                        btn.classList.add('bg-red-600', 'text-white');
+                        setTimeout(() => {
+                            btn.innerHTML = `VOTE ▲`;
+                            btn.classList.remove('bg-red-600', 'text-white');
+                        }, 2000);
+                    } else {
+                        console.error("Vote failed:", e);
+                        alert("Vote failed. Check console.");
+                    }
                 }
             } 
             // Option B: Save Locally (Fallback)
             else {
+                // Check local storage to prevent duplicate local votes
+                const localVotes = JSON.parse(localStorage.getItem('local_votes') || "[]");
+                
+                if (localVotes.includes(currentStreamer.name)) {
+                     const btn = document.getElementById('vote-btn');
+                     btn.innerHTML = `ALREADY VOTED`;
+                     btn.classList.add('bg-red-600', 'text-white');
+                     setTimeout(() => {
+                        btn.innerHTML = `VOTE ▲`;
+                        btn.classList.remove('bg-red-600', 'text-white');
+                     }, 2000);
+                     return;
+                }
+
                 const existing = leaderboardData.find(s => s.name === currentStreamer.name);
                 if (existing) existing.votes++;
                 else leaderboardData.push({ ...currentStreamer, votes: 1 });
+                
+                localVotes.push(currentStreamer.name);
+                localStorage.setItem('local_votes', JSON.stringify(localVotes));
+                
                 renderLeaderboard();
                 showVoteFeedback();
             }
