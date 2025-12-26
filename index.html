@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HiddenGems | Discover Underrated Streamers</title>
+    <title>DesiGems | Discover Hindi Streamers</title>
     <script src="https://cdn.tailwindcss.com"></script>
     
     <style>
@@ -16,8 +16,8 @@
 
     <nav class="p-6 border-b border-slate-800 flex justify-between items-center bg-slate-900/95 sticky top-0 z-50 backdrop-blur">
         <div class="flex items-center gap-2">
-            <span class="text-2xl">💎</span>
-            <h1 class="text-2xl font-bold tracking-tighter text-purple-400">HIDDEN<span class="text-white">GEMS</span></h1>
+            <span class="text-2xl">🇮🇳</span>
+            <h1 class="text-2xl font-bold tracking-tighter text-orange-400">DESI<span class="text-white">GEMS</span></h1>
         </div>
         
         <div class="flex items-center gap-4">
@@ -36,7 +36,7 @@
                 <div id="twitch-embed" class="absolute top-0 left-0 w-full h-full">
                     <div class="flex flex-col items-center justify-center h-full text-slate-500 bg-slate-900">
                         <span class="text-4xl mb-4">📺</span>
-                        <p class="text-lg">Connect Twitch to start searching</p>
+                        <p class="text-lg">Connect Twitch to find Hindi streamers</p>
                     </div>
                 </div>
             </div>
@@ -54,7 +54,7 @@
                         <span class="group-hover:-translate-y-1 transition-transform">▲</span> Vote
                     </button>
                     <button id="find-btn" onclick="getRandomStreamer()" disabled class="flex-1 md:flex-none bg-slate-700 text-slate-500 cursor-not-allowed px-6 py-3 rounded-lg font-bold transition flex items-center justify-center gap-2">
-                        Next Random 🎲
+                        Next Desi 🎲
                     </button>
                 </div>
             </div>
@@ -66,22 +66,22 @@
                     <h3 class="text-xl font-bold flex items-center gap-2">
                         🔥 Top Underrated
                     </h3>
-                    <span class="text-xs text-purple-400 uppercase font-bold tracking-wider">Live Now</span>
+                    <span class="text-xs text-orange-400 uppercase font-bold tracking-wider">Live Now</span>
                 </div>
                 
                 <div class="space-y-4">
                     <div class="flex items-center gap-4 bg-slate-700/50 p-3 rounded-lg border border-slate-700/50">
                         <div class="text-2xl font-bold text-slate-500">1</div>
                         <div>
-                            <div class="font-bold text-white">RetroGamer_99</div>
-                            <div class="text-xs text-slate-400">Playing Super Metroid</div>
+                            <div class="font-bold text-white">DesiGamer_01</div>
+                            <div class="text-xs text-slate-400">Playing BGMI</div>
                         </div>
-                        <div class="ml-auto font-mono text-purple-400">142 ▲</div>
+                        <div class="ml-auto font-mono text-orange-400">142 ▲</div>
                     </div>
                 </div>
 
-                <div class="mt-8 p-4 bg-purple-900/20 rounded-lg border border-purple-500/20 text-sm text-purple-200">
-                    <p>💡 <strong>Tip:</strong> Log in to vote. The stream plays directly here!</p>
+                <div class="mt-8 p-4 bg-orange-900/20 rounded-lg border border-orange-500/20 text-sm text-orange-200">
+                    <p>💡 <strong>Tip:</strong> Searching for "Hindi" language tag. Results may vary!</p>
                 </div>
             </div>
         </div>
@@ -123,11 +123,11 @@
                 findBtn.disabled = false;
                 findBtn.classList.remove('bg-slate-700', 'text-slate-500', 'cursor-not-allowed');
                 findBtn.classList.add('bg-purple-600', 'hover:bg-purple-700', 'text-white', 'shadow-lg', 'shadow-purple-900/50');
-                findBtn.innerText = "Find Random 🎲";
+                findBtn.innerText = "Find Desi Streamer 🎲";
             }
         }
 
-        // --- 2. CORE LOGIC ---
+        // --- 2. CORE LOGIC (Indian Filter Added) ---
         async function getRandomStreamer() {
             if (!accessToken) {
                 alert("⚠️ Please log in again to search!");
@@ -136,10 +136,10 @@
 
             const btn = document.getElementById('find-btn');
             const originalText = btn.innerText;
-            btn.innerText = "Searching...";
+            btn.innerText = "Scanning India...";
             btn.disabled = true;
             
-            document.getElementById('streamer-name').innerText = "Scanning Twitch Categories...";
+            document.getElementById('streamer-name').innerText = "Scanning Hindi Categories...";
 
             try {
                 // Step A: Fetch Games
@@ -155,8 +155,8 @@
                 
                 console.log(`Searching: ${randomGame.name}`);
 
-                // Step B: Fetch Streams
-                const streamsRes = await fetch(`https://api.twitch.tv/helix/streams?game_id=${randomGame.id}&first=100`, {
+                // Step B: Fetch Streams (ADDED &language=hi)
+                const streamsRes = await fetch(`https://api.twitch.tv/helix/streams?game_id=${randomGame.id}&first=100&language=hi`, {
                     headers: { 'Client-ID': CLIENT_ID, 'Authorization': `Bearer ${accessToken}` }
                 });
 
@@ -171,7 +171,8 @@
                     const pick = underrated[Math.floor(Math.random() * underrated.length)];
                     loadStream(pick.user_login, pick.viewer_count, randomGame.name);
                 } else {
-                    console.log("No match, retrying...");
+                    console.log("No Hindi match in this game, retrying...");
+                    // Retry immediately if no Hindi speakers found in this game
                     setTimeout(() => getRandomStreamer(), 500);
                     return; 
                 }
@@ -190,12 +191,10 @@
         // --- 3. IFRAME EMBED (The Fix) ---
         function loadStream(username, viewers, gameName) {
             const container = document.getElementById('twitch-embed');
-            container.innerHTML = ""; // Clear previous video
+            container.innerHTML = ""; 
 
-            // Get current domain for the 'parent' parameter
             const currentHost = window.location.hostname;
 
-            // Create the Iframe
             const iframe = document.createElement('iframe');
             iframe.src = `https://player.twitch.tv/?channel=${username}&parent=${currentHost}&muted=false`;
             iframe.width = "100%";
@@ -203,10 +202,8 @@
             iframe.setAttribute('frameborder', '0');
             iframe.setAttribute('allowfullscreen', 'true');
 
-            // Add to page
             container.appendChild(iframe);
 
-            // Update Info
             document.getElementById('streamer-name').innerText = username;
             document.getElementById('viewer-count').innerHTML = `
                 <span class="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
