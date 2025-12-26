@@ -286,7 +286,9 @@
                 });
                 if (gamesRes.status === 401) { logout(); return; }
                 const gamesData = await gamesRes.json();
-                const randomGame = gamesData.data[Math.floor(Math.random() * (gamesData.data.length - 5)) + 5];
+                
+                // UPDATE: Removed the "+ 5" offset so "Just Chatting" (usually #1) is now included
+                const randomGame = gamesData.data[Math.floor(Math.random() * gamesData.data.length)];
 
                 // 2. Fetch Streams based on Mode
                 let url = `https://api.twitch.tv/helix/streams?game_id=${randomGame.id}&first=100`;
@@ -308,16 +310,18 @@
 
                     // India Mode Logic
                     if (searchMode === 'india') {
-                        // Accept if Language is Hindi
                         if (s.language === 'hi') return true;
                         
-                        // Accept if English BUT Title has exact Indian keywords
+                        // Check Title AND Tags
                         const title = (s.title || "").toLowerCase();
-                        // STRICTER FILTER: Only 'india' and 'indian'
-                        const indianKeywords = ['india', 'indian'];
-                        const hasKeyword = indianKeywords.some(tag => title.includes(tag));
+                        const tags = (s.tags || []).map(t => t.toLowerCase());
                         
-                        return hasKeyword;
+                        const keywords = ['india', 'indian'];
+                        
+                        const titleHasKeyword = keywords.some(k => title.includes(k));
+                        const tagsHaveKeyword = keywords.some(k => tags.includes(k));
+                        
+                        return titleHasKeyword || tagsHaveKeyword;
                     }
                     
                     return true;
