@@ -8,7 +8,6 @@
     <script src="https://embed.twitch.tv/v1/embed.js"></script>
     
     <style>
-        /* Custom scrollbar for a cleaner look */
         ::-webkit-scrollbar { width: 8px; }
         ::-webkit-scrollbar-track { background: #1e293b; }
         ::-webkit-scrollbar-thumb { background: #8b5cf6; border-radius: 4px; }
@@ -80,42 +79,19 @@
                         </div>
                         <div class="ml-auto font-mono text-purple-400">142 ▲</div>
                     </div>
-
-                    <div class="flex items-center gap-4 bg-slate-700/50 p-3 rounded-lg border border-slate-700/50">
-                        <div class="text-2xl font-bold text-slate-500">2</div>
-                        <div>
-                            <div class="font-bold text-white">ChillBeatsLive</div>
-                            <div class="text-xs text-slate-400">Just Chatting</div>
-                        </div>
-                        <div class="ml-auto font-mono text-purple-400">98 ▲</div>
                     </div>
-
-                    <div class="flex items-center gap-4 bg-slate-700/50 p-3 rounded-lg border border-slate-700/50">
-                        <div class="text-2xl font-bold text-slate-500">3</div>
-                        <div>
-                            <div class="font-bold text-white">SpeedRunSam</div>
-                            <div class="text-xs text-slate-400">Playing Minecraft</div>
-                        </div>
-                        <div class="ml-auto font-mono text-purple-400">75 ▲</div>
-                    </div>
-                </div>
 
                 <div class="mt-8 p-4 bg-purple-900/20 rounded-lg border border-purple-500/20 text-sm text-purple-200">
-                    <p>💡 <strong>Tip:</strong> Log in to vote for your favorite hidden gems. The leaderboard resets daily.</p>
+                    <p>💡 <strong>Tip:</strong> Log in to vote. Leaderboard resets daily.</p>
                 </div>
             </div>
         </div>
-
     </main>
-
-    <footer class="p-6 text-center text-slate-500 text-sm">
-        <p>Built for the community. Not affiliated with Twitch.</p>
-    </footer>
 
     <script>
         // --- CONFIGURATION ---
         const CLIENT_ID = 't2vgijkp48wmupnrxr76wg26unrjqf'; 
-        // Automatically detects if you are on localhost or github.io
+        // Automatically detects your URL. Make sure this matches Twitch Console exactly!
         const REDIRECT_URI = window.location.href.split('#')[0]; 
 
         let accessToken = null;
@@ -154,9 +130,12 @@
             }
         }
 
-        // --- 2. CORE LOGIC (Find Streamer) ---
+        // --- 2. CORE LOGIC (With Error Handling) ---
         async function getRandomStreamer() {
-            if (!accessToken) return loginWithTwitch();
+            if (!accessToken) {
+                alert("⚠️ Not logged in! Please refresh and log in again.");
+                return;
+            }
 
             // UI Loading State
             const btn = document.getElementById('find-btn');
@@ -165,45 +144,51 @@
             btn.disabled = true;
             
             document.getElementById('streamer-name').innerText = "Scanning Twitch Categories...";
-            document.getElementById('viewer-count').innerHTML = '<span class="animate-pulse">Searching for under 30 viewers...</span>';
 
             try {
-                // Step A: Fetch Top Games (First 100) to ensure we get active categories
+                // Step A: Fetch Top Games
                 const gamesRes = await fetch('https://api.twitch.tv/helix/games/top?first=100', {
                     headers: { 'Client-ID': CLIENT_ID, 'Authorization': `Bearer ${accessToken}` }
                 });
+
+                if (!gamesRes.ok) throw new Error(`Game Fetch Failed: ${gamesRes.status}`);
+
                 const gamesData = await gamesRes.json();
                 
-                // Pick a random game, but try to avoid the top 5 (usually oversaturated)
+                // Pick a random game from top 100 (avoiding top 5)
                 const randomIndex = Math.floor(Math.random() * (gamesData.data.length - 5)) + 5; 
                 const randomGame = gamesData.data[randomIndex];
                 
                 console.log(`Searching category: ${randomGame.name}`);
+                document.getElementById('streamer-name').innerText = `Checking ${randomGame.name}...`;
 
                 // Step B: Fetch Streams for that game
                 const streamsRes = await fetch(`https://api.twitch.tv/helix/streams?game_id=${randomGame.id}&first=100`, {
                     headers: { 'Client-ID': CLIENT_ID, 'Authorization': `Bearer ${accessToken}` }
                 });
+
+                if (!streamsRes.ok) throw new Error(`Stream Fetch Failed: ${streamsRes.status}`);
+
                 const streamsData = await streamsRes.json();
 
-                // Step C: Filter for Underrated ( > 1 and < 30 )
-                // We filter > 1 to avoid "dead" streams or validation errors
+                // Step C: Filter for Underrated ( > 0 and < 30 )
                 const underrated = streamsData.data.filter(s => s.viewer_count < 30 && s.viewer_count > 0);
 
                 if (underrated.length > 0) {
-                    // Pick one winner
                     const pick = underrated[Math.floor(Math.random() * underrated.length)];
                     loadStream(pick.user_login, pick.viewer_count, randomGame.name);
                 } else {
-                    // Retry if no one found in this category
                     console.log("No match found, retrying...");
-                    await getRandomStreamer(); // Recursive retry
-                    return; // Exit this instance
+                    // Add a small delay so we don't crash browser with infinite loops
+                    setTimeout(() => getRandomStreamer(), 500);
+                    return; 
                 }
 
             } catch (error) {
                 console.error(error);
-                alert("Twitch API Error. See console.");
+                alert("Error: " + error.message);
+                btn.innerText = originalText;
+                btn.disabled = false;
             }
 
             // Reset Button
@@ -213,20 +198,17 @@
 
         // --- 3. EMBED LOGIC ---
         function loadStream(username, viewers, gameName) {
-            // Clear container
             document.getElementById('twitch-embed').innerHTML = ""; 
             
-            // Render Twitch Player
             new Twitch.Embed("twitch-embed", {
                 width: "100%",
                 height: "100%",
                 channel: username,
                 layout: "video",
                 autoplay: true,
-                parent: [window.location.hostname, "localhost", "127.0.0.1"] // Dynamic parent detection
+                parent: [window.location.hostname, "localhost", "127.0.0.1"] 
             });
 
-            // Update Info Text
             document.getElementById('streamer-name').innerText = username;
             document.getElementById('viewer-count').innerHTML = `
                 <span class="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
@@ -234,13 +216,10 @@
             `;
         }
 
-        // --- 4. VOTING UI (Frontend Only) ---
         function voteStreamer() {
             const name = document.getElementById('streamer-name').innerText;
             if(name.includes("Ready") || name.includes("Scanning")) return;
-            
-            // Visual Feedback
-            alert(`🔥 Voted for ${name}! (Connect a database to save this permanently)`);
+            alert(`🔥 Voted for ${name}!`);
         }
 
         // Run on startup
