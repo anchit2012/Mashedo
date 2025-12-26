@@ -1,68 +1,102 @@
-<script>
-    const CLIENT_ID = 'YOUR_TWITCH_CLIENT_ID'; // Public
-    const REDIRECT_URI = 'https://yourusername.github.io/your-repo-name/'; 
-    let accessToken = null;
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HiddenGems | Discover Underrated Streamers</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://embed.twitch.tv/v1/embed.js"></script>
+</head>
+<body class="bg-slate-900 text-white font-sans">
 
-    // 1. Function to send user to Twitch to login
-    function loginWithTwitch() {
-        const url = `https://id.twitch.tv/oauth2/authorize?client_id=${CLIENT_ID}&redirect_uri=${REDIRECT_URI}&response_type=token&scope=user:read:email`;
-        window.location.href = url;
-    }
+    <nav class="p-6 border-b border-slate-800 flex justify-between items-center">
+        <h1 class="text-2xl font-bold tracking-tighter text-purple-400">HIDDEN<span class="text-white">GEMS</span></h1>
+        <div class="space-x-6">
+            <a href="#" class="hover:text-purple-400">Leaderboard</a>
+            <button class="bg-purple-600 hover:bg-purple-700 px-4 py-2 rounded-lg font-bold transition">Login with Twitch</button>
+        </div>
+    </nav>
 
-    // 2. Check if we just returned from Twitch with a token
-    function checkUrlForToken() {
-        const hash = window.location.hash;
-        if (hash) {
-            const params = new URLSearchParams(hash.substring(1));
-            accessToken = params.get('access_token');
-            if (accessToken) {
-                console.log("Token acquired!");
-                // Clean the URL so the token doesn't stay in the bar
-                window.history.replaceState({}, document.title, window.location.pathname);
-                return true;
-            }
-        }
-        return false;
-    }
-
-    // 3. The Logic to find a streamer with < 30 viewers
-    async function getRandomStreamer() {
-        if (!accessToken) return alert("Please Login with Twitch first!");
-
-        // We fetch 'Just Chatting' streams (Game ID: 509658)
-        // We set 'first=100' to get a big batch
-        const response = await fetch('https://api.twitch.tv/helix/streams?game_id=509658&first=100', {
-            headers: {
-                'Client-ID': CLIENT_ID,
-                'Authorization': `Bearer ${accessToken}`
-            }
-        });
-
-        const data = await response.json();
+    <main class="max-w-6xl mx-auto p-6">
         
-        // Filter the list for streamers with < 30 viewers
-        const underrated = data.data.filter(s => s.viewer_count < 30 && s.viewer_count > 2);
+        <section class="grid grid-cols-1 lg:grid-cols-3 gap-8 mt-8">
+            
+            <div class="lg:col-span-2">
+                <div class="bg-black rounded-xl overflow-hidden aspect-video shadow-2xl border border-slate-800" id="twitch-embed">
+                    </div>
+                
+                <div class="mt-4 flex justify-between items-center bg-slate-800 p-4 rounded-xl">
+                    <div>
+                        <h2 id="streamer-name" class="text-xl font-bold">Press "Find Random" to start</h2>
+                        <p id="viewer-count" class="text-slate-400 text-sm">Under 30 Viewers Club</p>
+                    </div>
+                    <div class="flex gap-4">
+                        <button onclick="voteStreamer()" class="bg-green-500 hover:bg-green-600 px-6 py-2 rounded-full font-bold flex items-center gap-2 transition">
+                            <span>▲</span> Vote to Trend
+                        </button>
+                        <button onclick="getRandomStreamer()" class="bg-purple-500 hover:bg-purple-600 px-6 py-2 rounded-full font-bold transition">
+                            Next Random Stream 🎲
+                        </button>
+                    </div>
+                </div>
+            </div>
 
-        if (underrated.length > 0) {
-            const randomPick = underrated[Math.floor(Math.random() * underrated.length)];
-            loadStream(randomPick.user_login);
-        } else {
-            alert("No underrated streamers found in this batch. Try again!");
+            <div class="bg-slate-800 p-6 rounded-xl border border-slate-700">
+                <h3 class="text-lg font-bold mb-4 flex items-center gap-2">
+                    🔥 Trending Today
+                </h3>
+                <ul class="space-y-4">
+                    <li class="flex justify-between items-center border-b border-slate-700 pb-2">
+                        <span class="text-slate-400">1. PixelAdventurer</span>
+                        <span class="font-mono text-purple-400">142 votes</span>
+                    </li>
+                    <li class="flex justify-between items-center border-b border-slate-700 pb-2">
+                        <span class="text-slate-400">2. RetroLoFi_Girl</span>
+                        <span class="font-mono text-purple-400">98 votes</span>
+                    </li>
+                    <li class="flex justify-between items-center border-b border-slate-700 pb-2">
+                        <span class="text-slate-400">3. IndieGameDevX</span>
+                        <span class="font-mono text-purple-400">75 votes</span>
+                    </li>
+                </ul>
+                <p class="text-xs text-slate-500 mt-6 text-center italic">Resets every 24 hours</p>
+            </div>
+
+        </section>
+    </main>
+
+    <script>
+        // Placeholder function for the Logic
+        function getRandomStreamer() {
+            // In a real app, you would:
+            // 1. Call your backend (Node/Python)
+            // 2. Your backend asks Twitch API for streams with < 30 viewers
+            // 3. Pick one at random and return it here
+            
+            const demoStreamer = "twitchdev"; // Replace with random result
+            
+            document.getElementById('twitch-embed').innerHTML = ""; // Clear current
+            document.getElementById('streamer-name').innerText = demoStreamer;
+
+            new Twitch.Embed("twitch-embed", {
+                width: "100%",
+                height: "100%",
+                channel: demoStreamer,
+                parent: ["localhost"] // Change this to your domain when you deploy
+            });
         }
-    }
 
-    function loadStream(username) {
-        document.getElementById('twitch-embed').innerHTML = "";
-        new Twitch.Embed("twitch-embed", {
-            width: "100%",
-            height: "100%",
-            channel: username,
-            parent: [window.location.hostname] // This fixes the "refused to connect" error
-        });
-        document.getElementById('streamer-name').innerText = username;
-    }
+        function voteStreamer() {
+            const name = document.getElementById('streamer-name').innerText;
+            if(name === "Press \"Find Random\" to start") return alert("Find a streamer first!");
+            
+            alert("Voted for " + name + "! In your real app, this will save to your database.");
+        }
 
-    window.onload = () => {
-        checkUrlForToken();
-    };
-</script>
+        // Initialize first load
+        window.onload = () => {
+            console.log("App Ready. Connect your Twitch API to populate streamers.");
+        };
+    </script>
+</body>
+</html>
