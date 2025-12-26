@@ -280,48 +280,61 @@
             btn.disabled = true;
 
             try {
-                // 1. Top Games
-                const gamesRes = await fetch('https://api.twitch.tv/helix/games/top?first=100', {
-                    headers: { 'Client-ID': CLIENT_ID, 'Authorization': `Bearer ${accessToken}` }
-                });
-                if (gamesRes.status === 401) { logout(); return; }
-                const gamesData = await gamesRes.json();
-                
-                // UPDATE: Removed the "+ 5" offset so "Just Chatting" (usually #1) is now included
-                const randomGame = gamesData.data[Math.floor(Math.random() * gamesData.data.length)];
+                let streamsData = { data: [] };
 
-                // 2. Fetch Streams based on Mode
-                let url = `https://api.twitch.tv/helix/streams?game_id=${randomGame.id}&first=100`;
-                
-                // UPDATE: Broaden search to Hindi AND English for India mode
+                // STRATEGY A: INDIA MODE (Search by Keywords)
                 if (searchMode === 'india') {
-                     url += `&language=hi&language=en`;
-                }
-                
-                const streamsRes = await fetch(url, {
-                    headers: { 'Client-ID': CLIENT_ID, 'Authorization': `Bearer ${accessToken}` }
-                });
-                const streamsData = await streamsRes.json();
-
-                // 3. Filter
-                const underrated = streamsData.data.filter(s => {
-                    // Global viewer check
-                    if (s.viewer_count >= 50 || s.viewer_count === 0) return false;
-
-                    // India Mode Logic
-                    if (searchMode === 'india') {
-                        if (s.language === 'hi') return true;
+                    // Pick a random broad keyword to ensure we find "Just Chatting" folks too
+                    const keywords = ['india', 'desi', 'hindi', 'indian'];
+                    const randomKeyword = keywords[Math.floor(Math.random() * keywords.length)];
+                    
+                    // 1. Search Channels matching keyword (Search API)
+                    const searchRes = await fetch(`https://api.twitch.tv/helix/search/channels?query=${randomKeyword}&live_only=true&first=50`, {
+                        headers: { 'Client-ID': CLIENT_ID, 'Authorization': `Bearer ${accessToken}` }
+                    });
+                    const searchData = await searchRes.json();
+                    
+                    // 2. Get detailed Stream info for these channels (to check viewer count & tags)
+                    if (searchData.data && searchData.data.length > 0) {
+                        const liveChannels = searchData.data.filter(c => c.is_live);
+                        const userIds = liveChannels.map(c => `user_id=${c.id}`).join('&');
                         
-                        // Check Title AND Tags
+                        if (userIds) {
+                            const streamsRes = await fetch(`https://api.twitch.tv/helix/streams?${userIds}`, {
+                                headers: { 'Client-ID': CLIENT_ID, 'Authorization': `Bearer ${accessToken}` }
+                            });
+                            streamsData = await streamsRes.json();
+                        }
+                    }
+                } 
+                // STRATEGY B: GLOBAL MODE (Random Game)
+                else {
+                    const gamesRes = await fetch('https://api.twitch.tv/helix/games/top?first=100', {
+                        headers: { 'Client-ID': CLIENT_ID, 'Authorization': `Bearer ${accessToken}` }
+                    });
+                    const gamesData = await gamesRes.json();
+                    const randomGame = gamesData.data[Math.floor(Math.random() * gamesData.data.length)];
+                    
+                    const streamsRes = await fetch(`https://api.twitch.tv/helix/streams?game_id=${randomGame.id}&first=100`, {
+                        headers: { 'Client-ID': CLIENT_ID, 'Authorization': `Bearer ${accessToken}` }
+                    });
+                    streamsData = await streamsRes.json();
+                }
+
+                // 3. Filter Results (< 50 viewers)
+                const underrated = streamsData.data.filter(s => {
+                    if (s.viewer_count >= 50 || s.viewer_count === 0) return false;
+                    
+                    // Extra check for India mode to ensure relevance if search was broad
+                    if (searchMode === 'india') {
                         const title = (s.title || "").toLowerCase();
                         const tags = (s.tags || []).map(t => t.toLowerCase());
+                        const keywords = ['india', 'indian', 'desi', 'hindi'];
                         
-                        const keywords = ['india', 'indian'];
+                        if (s.language === 'hi') return true;
                         
-                        const titleHasKeyword = keywords.some(k => title.includes(k));
-                        const tagsHaveKeyword = keywords.some(k => tags.includes(k));
-                        
-                        return titleHasKeyword || tagsHaveKeyword;
+                        // Check if ANY keyword is in title OR tags
+                        return keywords.some(k => title.includes(k) || tags.includes(k));
                     }
                     
                     return true;
@@ -329,7 +342,7 @@
 
                 if (underrated.length > 0) {
                     const pick = underrated[Math.floor(Math.random() * underrated.length)];
-                    loadStream(pick, randomGame.name);
+                    loadStream(pick, pick.game_name || "Unknown");
                 } else {
                     console.log("Retrying scan...");
                     setTimeout(() => window.getRandomStreamer(), 500); 
