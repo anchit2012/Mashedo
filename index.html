@@ -276,15 +276,37 @@
 
                 // 2. Fetch Streams based on Mode
                 let url = `https://api.twitch.tv/helix/streams?game_id=${randomGame.id}&first=100`;
-                if (searchMode === 'india') url += `&language=hi`;
+                
+                // UPDATE: Broaden search to Hindi AND English for India mode
+                if (searchMode === 'india') {
+                     url += `&language=hi&language=en`;
+                }
                 
                 const streamsRes = await fetch(url, {
                     headers: { 'Client-ID': CLIENT_ID, 'Authorization': `Bearer ${accessToken}` }
                 });
                 const streamsData = await streamsRes.json();
 
-                // 3. Filter < 50 Viewers
-                const underrated = streamsData.data.filter(s => s.viewer_count < 50 && s.viewer_count > 0);
+                // 3. Filter
+                const underrated = streamsData.data.filter(s => {
+                    // Global viewer check
+                    if (s.viewer_count >= 50 || s.viewer_count === 0) return false;
+
+                    // India Mode Logic
+                    if (searchMode === 'india') {
+                        // Accept if Language is Hindi
+                        if (s.language === 'hi') return true;
+                        
+                        // Accept if English BUT Title has Indian keywords
+                        const title = (s.title || "").toLowerCase();
+                        const indianKeywords = ['india', 'indian', 'desi', 'hindi', 'bharat', 'punjabi', 'tamil', 'bangalore', 'mumbai', 'delhi'];
+                        const hasKeyword = indianKeywords.some(tag => title.includes(tag));
+                        
+                        return hasKeyword;
+                    }
+                    
+                    return true;
+                });
 
                 if (underrated.length > 0) {
                     const pick = underrated[Math.floor(Math.random() * underrated.length)];
