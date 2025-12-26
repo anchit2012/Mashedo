@@ -251,6 +251,7 @@
         let leaderboardData = []; 
         let searchMode = 'india';
         let seenStreamers = new Set(); // Prevent duplicates
+        let searchCursor = null; // For pagination
 
         // --- GLOBAL FUNCTIONS (Attached to Window for HTML Buttons) ---
         
@@ -258,6 +259,7 @@
             searchMode = mode;
             // Clear seen list when switching modes to allow fresh search
             seenStreamers.clear(); 
+            searchCursor = null; // Reset pagination
             document.getElementById('btn-india').classList.toggle('active', mode === 'india');
             document.getElementById('btn-global').classList.toggle('active', mode === 'global');
         }
@@ -274,8 +276,16 @@
             window.location.reload();
         }
 
-        window.getRandomStreamer = async function() {
+        window.getRandomStreamer = async function(retryCount = 0) {
             if (!accessToken) return alert("System Locked. Please Login.");
+
+            // SAFETY: If we retried 10 times and still found only "seen" people, reset.
+            if (retryCount > 10) {
+                console.log("Exhausted search options. Resetting seen list.");
+                seenStreamers.clear();
+                searchCursor = null;
+                retryCount = 0;
+            }
 
             const btn = document.getElementById('find-btn');
             const originalText = btn.innerHTML;
@@ -285,15 +295,30 @@
             try {
                 let streamsData = { data: [] };
 
-                // STRATEGY A: INDIA MODE (Search by Keywords)
+                // STRATEGY A: INDIA MODE (Deep Keyword Search)
                 if (searchMode === 'india') {
-                    const keywords = ['india', 'desi', 'hindi', 'indian'];
+                    // Focus on the Main Tags only
+                    const keywords = ['india', 'indian', 'hindi', 'desi'];
                     const randomKeyword = keywords[Math.floor(Math.random() * keywords.length)];
+                    console.log(`Searching: ${randomKeyword}, Retry: ${retryCount}`);
                     
-                    const searchRes = await fetch(`https://api.twitch.tv/helix/search/channels?query=${randomKeyword}&live_only=true&first=50`, {
+                    let searchUrl = `https://api.twitch.tv/helix/search/channels?query=${randomKeyword}&live_only=true&first=100`;
+                    // Use cursor if we are digging deeper
+                    if (searchCursor) {
+                        searchUrl += `&after=${searchCursor}`;
+                    }
+
+                    const searchRes = await fetch(searchUrl, {
                         headers: { 'Client-ID': CLIENT_ID, 'Authorization': `Bearer ${accessToken}` }
                     });
                     const searchData = await searchRes.json();
+                    
+                    // Save cursor for next time if we don't find anyone good this time
+                    if (searchData.pagination && searchData.pagination.cursor) {
+                        searchCursor = searchData.pagination.cursor;
+                    } else {
+                        searchCursor = null; // Reset if end of list
+                    }
                     
                     if (searchData.data && searchData.data.length > 0) {
                         const liveChannels = searchData.data.filter(c => c.is_live);
@@ -328,6 +353,7 @@
                     if (searchMode === 'india') {
                         const title = (s.title || "").toLowerCase();
                         const tags = (s.tags || []).map(t => t.toLowerCase());
+                        // Just check main keywords
                         const keywords = ['india', 'indian', 'desi', 'hindi'];
                         
                         if (s.language === 'hi') return true;
@@ -344,17 +370,11 @@
                     const pick = unseenCandidates[Math.floor(Math.random() * unseenCandidates.length)];
                     seenStreamers.add(pick.user_login); // Remember this streamer
                     loadStream(pick, pick.game_name || "Unknown");
-                } else if (candidates.length > 0) {
-                    // We've seen everyone in this batch!
-                    console.log("Cycle complete. Reshuffling...");
-                    // Reset seen list to start fresh cycle or just pick random
-                    seenStreamers.clear(); 
-                    const pick = candidates[Math.floor(Math.random() * candidates.length)];
-                    seenStreamers.add(pick.user_login);
-                    loadStream(pick, pick.game_name || "Unknown");
                 } else {
-                    console.log("No matches found. Retrying...");
-                    setTimeout(() => window.getRandomStreamer(), 500); 
+                    // LOOP FIX: Recurse to find more people
+                    console.log("No fresh candidates found. Digging deeper...");
+                    // Note: searchCursor is updated, so next call will get next page
+                    setTimeout(() => window.getRandomStreamer(retryCount + 1), 500); 
                 }
 
             } catch (err) {
