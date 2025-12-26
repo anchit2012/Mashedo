@@ -250,11 +250,14 @@
         let currentStreamer = null; 
         let leaderboardData = []; 
         let searchMode = 'india';
+        let seenStreamers = new Set(); // Prevent duplicates
 
         // --- GLOBAL FUNCTIONS (Attached to Window for HTML Buttons) ---
         
         window.setSearchMode = function(mode) {
             searchMode = mode;
+            // Clear seen list when switching modes to allow fresh search
+            seenStreamers.clear(); 
             document.getElementById('btn-india').classList.toggle('active', mode === 'india');
             document.getElementById('btn-global').classList.toggle('active', mode === 'global');
         }
@@ -284,17 +287,14 @@
 
                 // STRATEGY A: INDIA MODE (Search by Keywords)
                 if (searchMode === 'india') {
-                    // Pick a random broad keyword to ensure we find "Just Chatting" folks too
                     const keywords = ['india', 'desi', 'hindi', 'indian'];
                     const randomKeyword = keywords[Math.floor(Math.random() * keywords.length)];
                     
-                    // 1. Search Channels matching keyword (Search API)
                     const searchRes = await fetch(`https://api.twitch.tv/helix/search/channels?query=${randomKeyword}&live_only=true&first=50`, {
                         headers: { 'Client-ID': CLIENT_ID, 'Authorization': `Bearer ${accessToken}` }
                     });
                     const searchData = await searchRes.json();
                     
-                    // 2. Get detailed Stream info for these channels (to check viewer count & tags)
                     if (searchData.data && searchData.data.length > 0) {
                         const liveChannels = searchData.data.filter(c => c.is_live);
                         const userIds = liveChannels.map(c => `user_id=${c.id}`).join('&');
@@ -321,30 +321,39 @@
                     streamsData = await streamsRes.json();
                 }
 
-                // 3. Filter Results (< 50 viewers)
-                const underrated = streamsData.data.filter(s => {
+                // 3. Filter Candidates
+                const candidates = streamsData.data.filter(s => {
                     if (s.viewer_count >= 50 || s.viewer_count === 0) return false;
                     
-                    // Extra check for India mode to ensure relevance if search was broad
                     if (searchMode === 'india') {
                         const title = (s.title || "").toLowerCase();
                         const tags = (s.tags || []).map(t => t.toLowerCase());
                         const keywords = ['india', 'indian', 'desi', 'hindi'];
                         
                         if (s.language === 'hi') return true;
-                        
-                        // Check if ANY keyword is in title OR tags
                         return keywords.some(k => title.includes(k) || tags.includes(k));
                     }
                     
                     return true;
                 });
 
-                if (underrated.length > 0) {
-                    const pick = underrated[Math.floor(Math.random() * underrated.length)];
+                // 4. Check against Seen List
+                const unseenCandidates = candidates.filter(s => !seenStreamers.has(s.user_login));
+
+                if (unseenCandidates.length > 0) {
+                    const pick = unseenCandidates[Math.floor(Math.random() * unseenCandidates.length)];
+                    seenStreamers.add(pick.user_login); // Remember this streamer
+                    loadStream(pick, pick.game_name || "Unknown");
+                } else if (candidates.length > 0) {
+                    // We've seen everyone in this batch!
+                    console.log("Cycle complete. Reshuffling...");
+                    // Reset seen list to start fresh cycle or just pick random
+                    seenStreamers.clear(); 
+                    const pick = candidates[Math.floor(Math.random() * candidates.length)];
+                    seenStreamers.add(pick.user_login);
                     loadStream(pick, pick.game_name || "Unknown");
                 } else {
-                    console.log("Retrying scan...");
+                    console.log("No matches found. Retrying...");
                     setTimeout(() => window.getRandomStreamer(), 500); 
                 }
 
